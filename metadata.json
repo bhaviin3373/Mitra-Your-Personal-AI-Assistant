@@ -1,0 +1,7 @@
+{
+  "name": "Mitra - Your Personal AI Assistant",
+  "description": "A sleek, responsive AI assistant web application, similar to ChatGPT, powered by the Google Gemini API. It features real-time streaming for responses and a modern, dark-themed user interface.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
