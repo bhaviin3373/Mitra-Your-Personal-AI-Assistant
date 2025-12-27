@@ -1,7 +1,7 @@
+
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { SendIcon, MicrophoneIcon, PaperClipIcon, ClearIcon } from './icons';
 
-// Inform TypeScript about the SpeechRecognition API
 interface IWindow extends Window {
   SpeechRecognition: any;
   webkitSpeechRecognition: any;
@@ -26,10 +26,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, 
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      console.warn("Speech Recognition API is not supported in this browser.");
-      return;
-    }
+    if (!SpeechRecognition) return;
 
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
@@ -46,71 +43,49 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, 
     recognition.onresult = (event: any) => {
       let interimTranscript = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        } else {
-          interimTranscript += event.results[i][0].transcript;
-        }
+        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+        else interimTranscript += event.results[i][0].transcript;
       }
       setInput(finalTranscript + interimTranscript);
     };
 
-    recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
-      setIsRecording(false);
-    };
-    
-    recognition.onend = () => {
-      setIsRecording(false);
-    };
-    
+    recognition.onerror = () => setIsRecording(false);
+    recognition.onend = () => setIsRecording(false);
     recognitionRef.current = recognition;
 
-    return () => {
-      recognition.stop();
-    };
+    return () => recognition.stop();
   }, []);
 
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      const newHeight = Math.min(textareaRef.current.scrollHeight, 200);
+      textareaRef.current.style.height = `${newHeight}px`;
     }
   }, [input, attachment]);
 
   const handleToggleRecording = () => {
     if (!recognitionRef.current) return;
-    if (isRecording) {
-      recognitionRef.current.stop();
-    } else {
-      recognitionRef.current.start();
-    }
+    if (isRecording) recognitionRef.current.stop();
+    else recognitionRef.current.start();
   };
 
   const handleSubmit = () => {
     const trimmedInput = input.trim();
-
-    // Validate /imagine command has a prompt
     if (trimmedInput.toLowerCase().startsWith('/imagine')) {
         const prompt = trimmedInput.substring(8).trim();
         if (!prompt) {
-            setError("Please provide a prompt for the image generation after '/imagine'.");
-            return; // Stop submission
+            setError("Please provide a prompt for image generation.");
+            return;
         }
     }
-
-    // Validate that there is content to send or an attachment, and we are not loading.
-    if ((!trimmedInput && !attachment) || isLoading) {
-      return;
-    }
+    if ((!trimmedInput && !attachment) || isLoading) return;
     
-    setError(null); // Clear any previous errors
+    setError(null);
     onSendMessage(trimmedInput, attachment?.url);
     setInput('');
     setAttachment(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -118,93 +93,62 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, isLoading, 
       event.preventDefault();
       handleSubmit();
     }
-    if (event.key === 'Escape' && attachment) {
-      event.preventDefault();
-      handleRemoveAttachment();
-    }
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && file.type.startsWith('image/')) {
         const reader = new FileReader();
-        reader.onload = (e) => {
-            setAttachment({ url: e.target?.result as string, name: file.name });
-        };
+        reader.onload = (e) => setAttachment({ url: e.target?.result as string, name: file.name });
         reader.readAsDataURL(file);
     }
   };
 
-  const handleRemoveAttachment = () => {
-    setAttachment(null);
-    if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-    }
-  };
-  
-  const isSendDisabled = isLoading || (!input.trim() && !attachment);
-
   return (
-    <div className="bg-gray-800/50 p-4 shadow-inner backdrop-blur-sm">
-      <div className="relative max-w-4xl mx-auto">
+    <div className="p-3 sm:p-5 bg-gradient-to-t from-gray-900 via-gray-900/90 to-transparent">
+      <div className="relative max-w-4xl mx-auto group">
         {attachment && (
-            <div className="p-3 bg-gray-900/50 rounded-t-lg flex items-center justify-between border-b border-gray-700/60 animate-fade-in-scale transition-all">
-                <div className="flex items-center gap-4 overflow-hidden">
-                    <img src={attachment.url} alt="Attachment preview" className="w-16 h-16 rounded-lg object-cover flex-shrink-0 border-2 border-gray-600"/>
+            <div className="p-2 sm:p-3 bg-gray-800 rounded-t-2xl flex items-center justify-between border-x border-t border-gray-700 animate-fade-in-scale">
+                <div className="flex items-center gap-3 overflow-hidden">
+                    <img src={attachment.url} alt="Upload" className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl object-cover border-2 border-gray-700 shadow-md"/>
                     <div className="overflow-hidden">
-                        <p className="text-base font-medium text-gray-100 truncate">{attachment.name}</p>
-                        <p className="text-sm text-gray-400">Image will be sent with your message.</p>
+                        <p className="text-sm font-semibold text-gray-100 truncate">{attachment.name}</p>
+                        <p className="text-[10px] sm:text-xs text-gray-400">Attached image</p>
                     </div>
                 </div>
-                <button
-                    onClick={handleRemoveAttachment}
-                    className="p-1.5 rounded-full text-gray-400 hover:text-white hover:bg-gray-700/50 transition-colors flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-800 focus-visible:ring-white"
-                    aria-label="Remove attachment"
-                >
+                <button onClick={() => setAttachment(null)} className="p-2 text-gray-500 hover:text-white transition-colors" aria-label="Remove">
                     <ClearIcon className="w-5 h-5"/>
                 </button>
             </div>
         )}
-        <div className="relative">
+        <div className="relative shadow-2xl rounded-2xl overflow-hidden ring-1 ring-gray-800 group-focus-within:ring-[var(--primary-500)] transition-all">
             <textarea
                 ref={textareaRef}
                 value={input}
-                onChange={(e) => {
-                    setInput(e.target.value);
-                    setError(null); // Clear error on new input
-                }}
+                onChange={(e) => { setInput(e.target.value); setError(null); }}
                 onKeyDown={handleKeyDown}
-                placeholder="Message Mitra... (e.g., Explain quantum computing, or use /imagine to create an image)"
+                placeholder="Message Mitra..."
                 rows={1}
-                className={`w-full bg-gray-700/80 text-gray-200 border border-gray-600 p-3 pr-28 pl-24 resize-none focus:ring-2 focus:ring-[var(--primary-500)] focus:border-[var(--primary-500)] focus:outline-none transition-all duration-200 ${attachment ? 'rounded-b-lg rounded-t-none' : 'rounded-lg'}`}
+                className={`w-full bg-gray-800 text-gray-100 p-4 pr-14 pl-12 sm:pl-24 resize-none focus:outline-none transition-all ${attachment ? 'rounded-b-2xl' : 'rounded-2xl'}`}
                 disabled={isLoading}
             />
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            
+            <div className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 flex items-center gap-0.5 sm:gap-1">
                 <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
-                <button
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isLoading}
-                    className="p-2 rounded-full text-gray-400 hover:text-white disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary-500)]"
-                    aria-label="Attach file"
-                >
+                <button onClick={() => fileInputRef.current?.click()} disabled={isLoading} className="p-2 text-gray-500 hover:text-white transition-colors">
                     <PaperClipIcon className="w-5 h-5"/>
                 </button>
                 {recognitionRef.current && (
-                    <button
-                        onClick={handleToggleRecording}
-                        disabled={isLoading}
-                        className={`p-2 rounded-full text-gray-400 hover:text-white disabled:cursor-not-allowed transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary-500)] ${isRecording ? 'text-red-500 animate-pulse' : ''}`}
-                        aria-label={isRecording ? 'Stop recording' : 'Start recording'}
-                    >
+                    <button onClick={handleToggleRecording} disabled={isLoading} className={`p-2 transition-colors ${isRecording ? 'text-red-500 animate-pulse' : 'text-gray-500 hover:text-white'}`}>
                         <MicrophoneIcon className="w-5 h-5" />
                     </button>
                 )}
             </div>
+
             <button
               onClick={handleSubmit}
-              disabled={isSendDisabled}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full text-white bg-[var(--primary-600)] hover:bg-[var(--primary-500)] disabled:bg-gray-600 disabled:cursor-not-allowed transition-all duration-200 transform disabled:scale-100 hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-800 focus-visible:ring-white"
-              aria-label="Send message"
+              disabled={isLoading || (!input.trim() && !attachment)}
+              className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-2.5 rounded-xl text-white bg-[var(--primary-600)] hover:bg-[var(--primary-500)] disabled:bg-gray-700 disabled:text-gray-500 transition-all shadow-lg active:scale-95"
             >
               <SendIcon className="w-5 h-5" />
             </button>

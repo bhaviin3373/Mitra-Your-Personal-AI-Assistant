@@ -1,8 +1,8 @@
+
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { Role, Message } from '../types';
 import { UserIcon, ModelIcon, ClipboardIcon, CheckIcon, SpeakerIcon, ClipboardDocumentListIcon, MagicWandIcon, DeleteIcon, ArrowPathIcon } from './icons';
 
-// Inform TypeScript about global variables from external scripts
 declare var hljs: any;
 declare var marked: any;
 
@@ -18,14 +18,10 @@ interface ChatMessageProps {
 }
 
 const highlightText = (text: string, highlight: string): string => {
-  if (!highlight.trim()) {
-    return text;
-  }
-  // Escape special characters in the highlight string for regex
+  if (!highlight.trim()) return text;
   const safeHighlight = highlight.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const regex = new RegExp(`(${safeHighlight})`, 'gi');
-  // A distinct but not jarring highlight style for search terms on a dark theme.
-  return text.replace(regex, `<mark class="bg-yellow-400/50 text-white font-bold rounded px-1">$1</mark>`);
+  return text.replace(regex, `<mark class="bg-yellow-400/40 text-white font-bold rounded px-0.5">$1</mark>`);
 };
 
 const CodeBlock: React.FC<{ language: string; code: string; onCopy: (status: string) => void; }> = ({ language, code, onCopy }) => {
@@ -33,10 +29,7 @@ const CodeBlock: React.FC<{ language: string; code: string; onCopy: (status: str
   const [detectedLanguage, setDetectedLanguage] = useState(language);
 
   const highlightedCode = useMemo(() => {
-    if (typeof hljs === 'undefined') {
-      return code.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    }
-
+    if (typeof hljs === 'undefined') return code.replace(/</g, "&lt;").replace(/>/g, "&gt;");
     if (language) {
       const validLanguage = hljs.getLanguage(language) ? language : 'plaintext';
       setDetectedLanguage(validLanguage);
@@ -48,37 +41,23 @@ const CodeBlock: React.FC<{ language: string; code: string; onCopy: (status: str
     }
   }, [code, language]);
 
-
   const handleCopy = () => {
     navigator.clipboard.writeText(code);
     setCopied(true);
-    onCopy('Code copied to clipboard');
+    onCopy('Code copied');
     setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <div className="bg-gray-900 rounded-lg my-2 text-sm border border-gray-700 overflow-hidden">
-      <div className="flex justify-between items-center px-4 py-2 bg-gray-950 text-gray-400 text-xs">
-        <span>{detectedLanguage}</span>
-        <button
-          onClick={handleCopy}
-          className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors"
-        >
-          {copied ? (
-            <>
-              <CheckIcon className="w-4 h-4 text-green-400" />
-              <span className="text-green-400">Copied!</span>
-            </>
-          ) : (
-            <>
-              <ClipboardIcon className="w-4 h-4" />
-              <span>Copy code</span>
-            </>
-          )}
+    <div className="bg-gray-950 rounded-xl my-4 text-xs sm:text-sm border border-gray-800 overflow-hidden shadow-sm">
+      <div className="flex justify-between items-center px-4 py-2 bg-gray-900/50 text-gray-400 text-[10px] sm:text-xs border-b border-gray-800">
+        <span className="font-mono uppercase tracking-wider">{detectedLanguage}</span>
+        <button onClick={handleCopy} className="flex items-center gap-1.5 hover:text-white transition-colors">
+          {copied ? <><CheckIcon className="w-3.5 h-3.5 text-green-400" /><span className="text-green-400 font-medium">Copied!</span></> : <><ClipboardIcon className="w-3.5 h-3.5" /><span>Copy</span></>}
         </button>
       </div>
-      <pre className="p-4 overflow-x-auto hljs">
-        <code className={`language-${detectedLanguage}`} dangerouslySetInnerHTML={{ __html: highlightedCode }} />
+      <pre className="p-4 overflow-x-auto custom-scrollbar">
+        <code className={`language-${detectedLanguage} block`} dangerouslySetInnerHTML={{ __html: highlightedCode }} />
       </pre>
     </div>
   );
@@ -86,26 +65,20 @@ const CodeBlock: React.FC<{ language: string; code: string; onCopy: (status: str
 
 const FormattedContent: React.FC<{ content: string; searchQuery: string; onCopy: (status: string) => void; }> = ({ content, searchQuery, onCopy }) => {
   const parts = content.split(/(```[\s\S]*?```)/g);
-
   return (
     <>
       {parts.map((part, index) => {
         if (!part) return null;
         const codeBlockMatch = part.match(/```(\w*)\n([\s\S]*?)```/);
         if (codeBlockMatch) {
-          const language = codeBlockMatch[1] || '';
-          const code = codeBlockMatch[2] || '';
-          // We don't highlight code to avoid complex conflicts with hljs
-          return <CodeBlock key={index} language={language} code={code} onCopy={onCopy} />;
+          return <CodeBlock key={index} language={codeBlockMatch[1] || ''} code={codeBlockMatch[2] || ''} onCopy={onCopy} />;
         } else {
           if (typeof marked !== 'undefined') {
             const highlightedPart = highlightText(part, searchQuery);
             const rawMarkup = marked.parse(highlightedPart, { gfm: true, breaks: true });
-            return <div key={index} dangerouslySetInnerHTML={{ __html: rawMarkup }} />;
+            return <div key={index} className="markdown-container" dangerouslySetInnerHTML={{ __html: rawMarkup }} />;
           }
-          // Fallback if marked isn't loaded
-          const highlightedPart = highlightText(part, searchQuery);
-          return <span key={index} dangerouslySetInnerHTML={{ __html: highlightedPart.replace(/\n/g, '<br />') }} />;
+          return <span key={index} dangerouslySetInnerHTML={{ __html: highlightText(part, searchQuery).replace(/\n/g, '<br />') }} />;
         }
       })}
     </>
@@ -119,161 +92,130 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isLastMessage
 
   const allCodeBlocks = useMemo(() => {
     const codeBlockRegex = /```(?:\w*\n)?([\s\S]*?)```/g;
-    const matches = [...message.content.matchAll(codeBlockRegex)];
-    return matches.map(match => match[1].trim());
+    return [...message.content.matchAll(codeBlockRegex)].map(match => match[1].trim());
   }, [message.content]);
 
   const handleCopyAllCode = () => {
     if (allCodeBlocks.length > 0) {
-      const separator = '\n\n/* --- Snippet copied from Mitra AI --- */\n\n';
-      const combinedCode = allCodeBlocks.join(separator);
-      navigator.clipboard.writeText(combinedCode);
+      navigator.clipboard.writeText(allCodeBlocks.join('\n\n/* --- Next Snippet --- */\n\n'));
       setAllCopied(true);
-      setCopyStatus('All code copied to clipboard');
+      setCopyStatus('All snippets copied');
       setTimeout(() => setAllCopied(false), 2000);
     }
   };
 
-  // Special loading indicator for image generation
+  const avatar = (
+    <div className={`flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center shadow-lg transition-transform hover:scale-105 ${
+      isUserMessage ? 'bg-gray-700' : 'bg-[var(--primary-600)]'
+    }`}>
+      {isUserMessage ? <UserIcon className="w-5 h-5 text-white" /> : <ModelIcon className="w-5 h-5 text-white" />}
+    </div>
+  );
+
   if (!isUserMessage && message.content === 'Generating image...') {
       return (
-        <div className="flex items-start gap-4 my-4">
-          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--primary-600)] flex items-center justify-center shadow-lg">
-            <ModelIcon className="w-5 h-5 text-white" />
-          </div>
-          <div className="max-w-xl p-4 rounded-lg shadow-md bg-gray-800 border border-gray-700/80 rounded-bl-none">
+        <div className="flex items-start gap-3 sm:gap-4 my-6 animate-pulse">
+          {avatar}
+          <div className="max-w-[85%] sm:max-w-xl p-4 rounded-2xl bg-gray-800/50 border border-gray-700/50 rounded-tl-none">
             <div className="flex items-center gap-3">
-              <MagicWandIcon className="w-5 h-5 text-[var(--primary-400)] animate-pulse" />
-              <p className="text-gray-300">Generating image...</p>
+              <MagicWandIcon className="w-5 h-5 text-[var(--primary-400)] animate-spin-slow" />
+              <p className="text-gray-400 font-medium">Imagining something beautiful...</p>
             </div>
           </div>
         </div>
       )
   }
 
-  // Typing indicator for empty, last, model message
   if (!isUserMessage && isLastMessage && message.content.trim() === '' && !message.image) {
     return (
-      <div className="flex items-start gap-4 my-4">
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--primary-600)] flex items-center justify-center shadow-lg">
-          <ModelIcon className="w-5 h-5 text-white" />
-        </div>
-        <div className="max-w-xl p-4 rounded-lg shadow-md bg-gray-800 border border-gray-700/80 rounded-bl-none">
-          <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 bg-[var(--primary-400)] rounded-full animate-refined-pulse"></div>
-            <div className="w-2.5 h-2.5 bg-[var(--primary-400)] rounded-full animate-refined-pulse" style={{ animationDelay: '0.2s' }}></div>
-            <div className="w-2.5 h-2.5 bg-[var(--primary-400)] rounded-full animate-refined-pulse" style={{ animationDelay: '0.4s' }}></div>
-          </div>
+      <div className="flex items-start gap-3 sm:gap-4 my-6">
+        {avatar}
+        <div className="p-4 rounded-2xl bg-gray-800/80 border border-gray-700/50 rounded-tl-none flex gap-1.5 items-center">
+            <div className="w-2 h-2 bg-[var(--primary-400)] rounded-full animate-bounce" style={{ animationDelay: '0s' }}></div>
+            <div className="w-2 h-2 bg-[var(--primary-400)] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+            <div className="w-2 h-2 bg-[var(--primary-400)] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div>
+    <div className="group/msg mb-8 last:mb-20">
       <div aria-live="polite" role="status" className="sr-only">{copyStatus}</div>
-      <div className={`flex items-start gap-4 my-4 ${isUserMessage ? 'justify-end' : ''}`}>
-        {!isUserMessage && (
-          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--primary-600)] flex items-center justify-center shadow-lg">
-            <ModelIcon className="w-5 h-5 text-white" />
-          </div>
-        )}
+      <div className={`flex items-start gap-3 sm:gap-4 ${isUserMessage ? 'flex-row-reverse' : ''}`}>
+        <div className="hidden sm:block">
+          {avatar}
+        </div>
         <div
-          className={`max-w-xl p-4 rounded-lg shadow-md transition-colors ${
+          className={`relative max-w-[88%] sm:max-w-[80%] md:max-w-[70%] lg:max-w-2xl px-4 py-3 sm:px-5 sm:py-4 rounded-2xl shadow-sm transition-all duration-300 ${
             isUserMessage
-              ? 'bg-[var(--primary-600)] text-white rounded-br-none hover:bg-[var(--primary-500)]'
-              : 'bg-gray-800 text-gray-200 rounded-bl-none border border-gray-700/80 hover:bg-gray-700/80'
+              ? 'bg-[var(--primary-600)] text-white rounded-tr-none ml-auto'
+              : 'bg-gray-800/90 text-gray-100 rounded-tl-none border border-gray-700/50 mr-auto'
           }`}
         >
           {message.image && (
-            <div className="relative group mb-2">
-              <img src={message.image} alt={isUserMessage ? "User attachment" : "AI generated image"} className="max-w-xs w-full rounded-lg" />
+            <div className="relative mb-3 group/img overflow-hidden rounded-xl bg-black/20">
+              <img src={message.image} alt="Media content" className="w-full h-auto max-h-[400px] object-contain transition-transform duration-500 hover:scale-105" />
                {!isUserMessage && (
-                  <div className="absolute top-2 left-2 p-1.5 bg-black/50 backdrop-blur-sm rounded-full">
-                      <MagicWandIcon className="w-5 h-5 text-[var(--primary-400)]"/>
+                  <div className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur-md rounded-lg">
+                      <MagicWandIcon className="w-4 h-4 text-[var(--primary-400)]"/>
                   </div>
               )}
             </div>
           )}
           {message.content && (
-            <div className="prose prose-invert prose-sm max-w-none prose-p:my-2 prose-pre:my-2 prose-ul:my-2 prose-ol:my-2">
+            <div className={`prose prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-transparent prose-pre:p-0 ${isUserMessage ? 'prose-headings:text-white prose-strong:text-white' : ''}`}>
                <FormattedContent content={message.content} searchQuery={searchQuery} onCopy={(status) => {
-                 setCopyStatus(''); // Clear first to ensure re-announcement
+                 setCopyStatus('');
                  setTimeout(() => setCopyStatus(status), 50);
                }} />
             </div>
           )}
         </div>
-        {isUserMessage && (
-          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center shadow-lg">
-            <UserIcon className="w-5 h-5 text-white" />
-          </div>
-        )}
       </div>
 
       {!isUserMessage && (message.content || allCodeBlocks.length > 0) && (
-        <div className={`max-w-xl -mt-2 flex items-center gap-2 flex-wrap ${isUserMessage ? 'justify-end mr-12' : 'ml-12'}`}>
-          {message.content && (
-            <button
-              onClick={() => onSpeak(message)}
-              className="p-1.5 rounded-full text-gray-400 hover:bg-gray-700/50 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary-500)]"
-              aria-label={isSpeaking ? 'Stop speaking' : 'Read message aloud'}
-              aria-pressed={isSpeaking}
-            >
-              <SpeakerIcon className={`w-5 h-5 ${isSpeaking ? 'text-[var(--primary-400)] animate-pulse' : ''}`} />
-            </button>
-          )}
+        <div className="mt-2 flex flex-wrap items-center gap-2 sm:ml-12 pl-1 sm:pl-0">
+          <button
+            onClick={() => onSpeak(message)}
+            className={`p-2 rounded-lg transition-all ${isSpeaking ? 'bg-[var(--primary-500)]/20 text-[var(--primary-400)]' : 'text-gray-500 hover:bg-gray-800 hover:text-gray-300'}`}
+            aria-label={isSpeaking ? 'Stop speaking' : 'Speak message'}
+          >
+            <SpeakerIcon className={`w-4 h-4 ${isSpeaking ? 'animate-pulse' : ''}`} />
+          </button>
 
           {allCodeBlocks.length > 0 && (
             <button
               onClick={handleCopyAllCode}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 border border-gray-700/80 hover:bg-gray-700/50 text-gray-300 text-sm rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary-500)]"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-800/50 border border-gray-700/50 hover:bg-gray-700 hover:text-white text-gray-400 rounded-lg transition-all text-[10px] sm:text-xs font-medium"
             >
-              {allCopied ? (
-                <>
-                  <CheckIcon className="w-4 h-4 text-green-400" />
-                  <span className="text-green-400 text-xs">All Copied!</span>
-                </>
-              ) : (
-                <>
-                  <ClipboardDocumentListIcon className="w-4 h-4" />
-                  <span className="text-xs">Copy all code</span>
-                </>
-              )}
+              {allCopied ? <><CheckIcon className="w-3.5 h-3.5 text-green-400" /><span>All Copied!</span></> : <><ClipboardDocumentListIcon className="w-3.5 h-3.5" /><span>Copy Snippets</span></>}
             </button>
           )}
 
-          {isLastMessage && message.suggestions && message.suggestions.length > 0 && (
-            message.suggestions.map((suggestion, index) => (
-              <button
-                key={index}
-                onClick={() => onSuggestionClick(suggestion)}
-                className="px-3 py-1.5 bg-gray-800 border border-gray-700/80 hover:bg-gray-700/50 text-gray-300 text-sm rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary-500)]"
-              >
-                {suggestion}
+          {isLastMessage && message.content && (
+            <div className="flex items-center gap-1">
+              <button onClick={onRegenerate} className="p-2 text-gray-500 hover:bg-gray-800 hover:text-white rounded-lg transition-all" title="Regenerate">
+                <ArrowPathIcon className="w-4 h-4" />
               </button>
-            ))
+              <button onClick={onClearChat} className="p-2 text-gray-500 hover:bg-red-500/10 hover:text-red-400 rounded-lg transition-all" title="Reset Conversation">
+                <DeleteIcon className="w-4 h-4" />
+              </button>
+            </div>
           )}
 
-          {isLastMessage && message.content && (
-            <>
-              <button
-                onClick={onRegenerate}
-                className="p-1.5 rounded-full text-gray-400 hover:bg-gray-700/50 hover:text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary-500)]"
-                aria-label="Regenerate Response"
-                title="Regenerate Response"
-              >
-                <ArrowPathIcon className="w-5 h-5" />
-              </button>
-              <button
-                  onClick={onClearChat}
-                  className="p-1.5 rounded-full text-gray-400 hover:bg-red-500/20 hover:text-red-400 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
-                  aria-label="Clear chat and start new conversation"
-                  title="Clear Chat"
+          {isLastMessage && message.suggestions && message.suggestions.length > 0 && (
+            <div className="w-full flex flex-wrap gap-2 mt-2">
+              {message.suggestions.map((suggestion, index) => (
+                <button
+                  key={index}
+                  onClick={() => onSuggestionClick(suggestion)}
+                  className="px-3 py-1.5 bg-gray-800 border border-gray-700/50 hover:bg-gray-700 hover:border-[var(--primary-500)] text-gray-300 text-xs rounded-full transition-all focus:ring-1 focus:ring-[var(--primary-500)]"
                 >
-                  <DeleteIcon className="w-5 h-5" />
-              </button>
-            </>
+                  {suggestion}
+                </button>
+              ))}
+            </div>
           )}
         </div>
       )}
